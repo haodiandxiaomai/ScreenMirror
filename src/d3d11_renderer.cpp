@@ -31,7 +31,7 @@ static double percentileFromSorted(const std::vector<double>& values, double pct
 
 // ---------- 窗口类名 ----------
 const wchar_t* WindowClassName() { return HLW(L"ScreenMirrorWindow"); }
-const wchar_t* WindowTitleBase() { return HLW(L"屏幕投屏"); }
+const wchar_t* WindowTitleBase() { return L"屏幕投屏"; }
 
 // ---------- 构造函数 / 析构函数 ----------
 D3D11Renderer::D3D11Renderer(HINSTANCE inst, SharedState& state)
