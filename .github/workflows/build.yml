@@ -1,36 +1,29 @@
-cmake_minimum_required(VERSION 3.16)
-project(ScreenMirror)
+name: Build Windows EXE
 
-set(CMAKE_CXX_STANDARD 17)
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
 
-# 🔴 关键修复：强制使用 winsock2，禁止 winsock.h
-add_compile_definitions(WIN32_LEAN_AND_MEAN)
-add_compile_definitions(NOMINMAX)
-add_compile_definitions(_WINSOCKAPI_)
+jobs:
+  build:
+    runs-on: windows-latest
 
-set(TURBOJPEG_DIR "${CMAKE_SOURCE_DIR}/turbojpeg")
-include_directories(${TURBOJPEG_DIR}/include)
+    steps:
+    - name: 拉取代码
+      uses: actions/checkout@v4
 
-set(SOURCES
-    src/main.cpp
-    src/mirror_net.cpp
-    src/mirror_receiver.cpp
-    src/hl_common.cpp
-    src/hud_overlay.cpp
-    src/perf_logger.cpp
-    src/d3d11_renderer.cpp
-)
+    - name: 安装 CMake
+      uses: lukka/get-cmake@latest
 
-if(WIN32)
-    add_executable(ScreenMirror WIN32 ${SOURCES})
-    target_link_libraries(ScreenMirror
-        ws2_32
-        d3d11
-        dxgi
-        d3dcompiler
-        winmm
-        ${TURBOJPEG_DIR}/lib/turbojpeg-static.lib
-    )
-else()
-    message(FATAL_ERROR "Only Windows is supported")
-endif()
+    - name: 配置 CMake 项目
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: 编译生成 EXE
+      run: cmake --build build --config Release
+
+    - name: 上传编译好的 EXE 文件
+      uses: actions/upload-artifact@v4
+      with:
+        name: ScreenMirror-Exe
+        path: build/Release/ScreenMirror.exe
