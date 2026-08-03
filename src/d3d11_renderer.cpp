@@ -30,7 +30,7 @@ static double percentileFromSorted(const std::vector<double>& values, double pct
 
 
 // ---------- 窗口类名 ----------
-const wchar_t* WindowClassName() { return HLW(L"ScreenMirrorWindow"); }
+const wchar_t* WindowClassName() { return L"ScreenMirrorWindow"; }
 const wchar_t* WindowTitleBase() { return L"屏幕投屏"; }
 
 // ---------- 构造函数 / 析构函数 ----------
@@ -38,7 +38,7 @@ D3D11Renderer::D3D11Renderer(HINSTANCE inst, SharedState& state)
     : inst_(inst), state_(state) {
     // 初始化成员变量
     hudVisible_ = true;
-    stretch_ = false;
+    stretch_ = true;
     fullscreen_ = false;
     allowTearing_ = false;
     frameVerticesInitialized_ = false;
@@ -816,82 +816,86 @@ void D3D11Renderer::updateHudTextureIfNeeded(bool force) {
 
     const int width = hudTexWidth_;
     const int height = hudTexHeight_;
-    uint32_t* bits = static_cast<uint32_t*>(mapped.pData);
-    // 清空为透明
-    std::memset(bits, 0, static_cast<size_t>(width) * height * 4);
 
-    // 准备要绘制的文字行
+    // 使用 hudPixels_ 作为中间缓冲区
+    const size_t pixelCount = static_cast<size_t>(width) * height;
+    hudPixels_.assign(pixelCount * 4, 0);
+
+    // 准备文字行（保留中文，但点阵字体只支持 ASCII，中文将显示为 '?'）
     std::vector<std::wstring> lines;
-    // 状态行
-    lines.push_back(L"状态: " + currentStatus_);
+    lines.push_back(L"Status: " + currentStatus_);
 
-    // 统计信息
     wchar_t buf[256];
     if (cachedRecvFps_ > 0.0 || cachedDecodeFps_ > 0.0 || cachedDisplayFps_ > 0.0) {
-        swprintf_s(buf, 256, L"接收: %.1f fps  %.1f Mbps  解码: %.1f fps  显示: %.1f fps",
-                 cachedRecvFps_, cachedRecvMbps_, cachedDecodeFps_, cachedDisplayFps_);
+        swprintf_s(buf, 256, L"Recv: %.1f fps  %.1f Mbps  Dec: %.1f fps  Disp: %.1f fps",
+                   cachedRecvFps_, cachedRecvMbps_, cachedDecodeFps_, cachedDisplayFps_);
         lines.push_back(buf);
     }
     if (cachedAvgJpegKb_ > 0.0) {
-        swprintf_s(buf, 256, L"平均 JPEG: %.1f KB  分块: %d  (0:%.1fKB 1:%.1fKB)",
-                 cachedAvgJpegKb_, cachedRecvParts_, cachedPart0Kb_, cachedPart1Kb_);
+        swprintf_s(buf, 256, L"JPEG: %.1f KB  Parts: %d  (0:%.1fKB 1:%.1fKB)",
+                   cachedAvgJpegKb_, cachedRecvParts_, cachedPart0Kb_, cachedPart1Kb_);
         lines.push_back(buf);
     }
-    // 分块统计
+    // 分块统计（保留英文部分，中文会变 '?'，但数据是数字，无妨）
     appendPartStatsHudLines(lines);
 
-    // 延迟数据
     if (lowerBoundMs_ > 0.0) {
-        swprintf_s(buf, 256, L"延迟下限: %.1f ms  (capture %.1f encode %.1f queue %.1f socket %.1f decode %.1f upload %.1f draw %.1f present %.1f)",
-                 lowerBoundMs_, cachedCaptureMs_, cachedEncodeMs_, cachedQueueMs_,
-                 cachedSocketMs_, cachedDecodeWallMs_, lastUploadCpuMs_, lastDrawCpuMs_, lastPresentCpuMs_);
+        swprintf_s(buf, 256, L"Latency: %.1f ms  (capture %.1f encode %.1f queue %.1f socket %.1f decode %.1f upload %.1f draw %.1f present %.1f)",
+                   lowerBoundMs_, cachedCaptureMs_, cachedEncodeMs_, cachedQueueMs_,
+                   cachedSocketMs_, cachedDecodeWallMs_, lastUploadCpuMs_, lastDrawCpuMs_, lastPresentCpuMs_);
         lines.push_back(buf);
     }
     if (presentIntervalShownAvgMs_ > 0.0) {
-        swprintf_s(buf, 256, L"显示间隔: avg %.2f ms  max %.2f ms  p95 %.2f ms  p99 %.2f ms",
-                 presentIntervalShownAvgMs_, presentIntervalShownMaxMs_, presentIntervalP95Ms_, presentIntervalP99Ms_);
+        swprintf_s(buf, 256, L"Interval: avg %.2f ms  max %.2f ms  p95 %.2f ms  p99 %.2f ms",
+                   presentIntervalShownAvgMs_, presentIntervalShownMaxMs_, presentIntervalP95Ms_, presentIntervalP99Ms_);
         lines.push_back(buf);
     }
     if (skippedFramesLast_ > 0) {
-        swprintf_s(buf, 256, L"跳帧: %d", skippedFramesLast_);
+        swprintf_s(buf, 256, L"Skipped: %d", skippedFramesLast_);
         lines.push_back(buf);
     }
     if (uploadMapCountShown_ > 0 || uploadFallbackCountShown_ > 0) {
-        swprintf_s(buf, 256, L"上传: Map %d  Fallback %d  Fail %d  mode %d  pitch %u",
-                 uploadMapCountShown_, uploadFallbackCountShown_, uploadFailedCountShown_, lastUploadMode_, lastUploadRowPitch_);
+        swprintf_s(buf, 256, L"Upload: Map %d  Fallback %d  Fail %d  mode %d  pitch %u",
+                   uploadMapCountShown_, uploadFallbackCountShown_, uploadFailedCountShown_, lastUploadMode_, lastUploadRowPitch_);
         lines.push_back(buf);
     }
     if (cachedDisplayFps_ > 0.0) {
-        swprintf_s(buf, 256, L"等效 FPS (下限): %.1f", lowerBoundEqFps_);
+        swprintf_s(buf, 256, L"Equiv FPS: %.1f", lowerBoundEqFps_);
         lines.push_back(buf);
     }
     if (cachedDecodePartCount_ > 1) {
-        swprintf_s(buf, 256, L"解码分块: %d  墙钟 %.1fms  CPU %.1fms  最大块 %.1fms  尾部等待 %.1fms  重叠节省 %.1fms",
-                 cachedDecodePartCount_, cachedDecodeWallMs_, cachedDecodeCpuSumMs_,
-                 cachedDecodeMaxPartMs_, cachedDecodeTailWaitMs_, cachedDecodeOverlapSavedMs_);
+        swprintf_s(buf, 256, L"Decode parts: %d  wall %.1fms  CPU %.1fms  max %.1fms  tail %.1fms  saved %.1fms",
+                   cachedDecodePartCount_, cachedDecodeWallMs_, cachedDecodeCpuSumMs_,
+                   cachedDecodeMaxPartMs_, cachedDecodeTailWaitMs_, cachedDecodeOverlapSavedMs_);
         lines.push_back(buf);
     }
 
-    // 简单 HUD 绘制（白色文字，黑色背景半透明）
-    const int fontSize = 16;
-    const int fontHeight = fontSize + 4;
-    const int startX = 10;
-    int y = 10;
-    for (const auto& line : lines) {
-        // 只绘制前几个字符，这里用简单的矩形模拟文字（实际需要文字渲染，此处简化）
-        // 由于我们没有 FreeType 或 GDI，为了演示，我们用彩色块表示（实际项目可用 GDI 或 DirectWrite）
-        // 此处仅做示意，真实实现可调用 GDI 绘制或 DirectWrite。
-        // 这里我们只画一个色块占位
-        for (int i = 0; i < (int)line.size() && i < 80; ++i) {
-            int x = startX + i * 8;
-            if (x + 8 < width && y + fontHeight < height) {
-                uint32_t* pixel = bits + y * width + x;
-                *pixel = 0xFFFFFFFF; // 白色
+    // 使用点阵字体绘制每一行
+    const int scale = 2;
+    int yPos = 10;
+    const uint8_t fgB = 255, fgG = 255, fgR = 255, fgA = 255; // 白色
+
+    for (const auto& wline : lines) {
+        // 将宽字符串转为窄字符串，点阵字体只支持 ASCII
+        std::string narrow;
+        for (wchar_t ch : wline) {
+            if (ch >= 32 && ch <= 126) {
+                narrow.push_back(static_cast<char>(ch));
+            } else {
+                // 非 ASCII 用 '?' 代替
+                narrow.push_back('?');
             }
         }
-        y += fontHeight;
-        if (y >= height) break;
+        if (narrow.empty()) continue;
+        // 使用 HudDrawText 绘制到 hudPixels_
+        HudDrawText(hudPixels_, width, height, 10, yPos, narrow.c_str(), scale, fgB, fgG, fgR, fgA);
+        yPos += (7 + 1) * scale; // 每行高度
+        if (yPos >= height) break;
     }
+
+    // 将 hudPixels_ 复制到纹理
+    uint8_t* dst = static_cast<uint8_t*>(mapped.pData);
+    std::memcpy(dst, hudPixels_.data(), hudPixels_.size());
 
     ctx_->Unmap(hudTex_, 0);
     hudDirty_ = false;
@@ -901,10 +905,10 @@ void D3D11Renderer::appendPartStatsHudLines(std::vector<std::wstring>& lines) co
     if (cachedPartStatCount_ <= 0) return;
     wchar_t buf[512];
     for (int i = 0; i < cachedPartStatCount_ && i < MAX_RUNTIME_SPLIT_PARTS; ++i) {
-        swprintf_s(buf, 512, L"  Part %d: left=%d top=%d %dx%d  %.1fKB  cpu%d freq%d  enc%.1fms  share%d‰",
-                 i, cachedPartLeft_[i], cachedPartTop_[i], cachedPartWidth_[i], cachedPartHeight_[i],
-                 cachedPartKb_[i], cachedPartCpu_[i], cachedPartCpuFreqKhz_[i],
-                 cachedPartMs_[i], cachedPartSharePermille_[i]);
+        swprintf_s(buf, 512, L"  Part %d: L=%d T=%d %dx%d  %.1fKB  cpu%d freq%d  enc%.1fms  share%d%%",
+                   i, cachedPartLeft_[i], cachedPartTop_[i], cachedPartWidth_[i], cachedPartHeight_[i],
+                   cachedPartKb_[i], cachedPartCpu_[i], cachedPartCpuFreqKhz_[i],
+                   cachedPartMs_[i], cachedPartSharePermille_[i]);
         lines.push_back(buf);
     }
 }
