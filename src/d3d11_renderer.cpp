@@ -212,11 +212,11 @@ bool D3D11Renderer::createDevice() {
 
     IDXGIDevice* dxgiDevice = nullptr;
     IDXGIAdapter* adapter = nullptr;
-    IDXGIFactory4* factory = nullptr;  // 改为 IDXGIFactory4
+    IDXGIFactory5* factory = nullptr;   // 改为 IDXGIFactory5
 
     hr = device_->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgiDevice);
     if (SUCCEEDED(hr)) hr = dxgiDevice->GetAdapter(&adapter);
-    if (SUCCEEDED(hr)) hr = adapter->GetParent(__uuidof(IDXGIFactory4), (void**)&factory);  // 使用 IDXGIFactory4
+    if (SUCCEEDED(hr)) hr = adapter->GetParent(__uuidof(IDXGIFactory5), (void**)&factory);  // 改为 IDXGIFactory5
 
     if (factory) {
         BOOL allowTearing = FALSE;
