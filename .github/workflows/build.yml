@@ -16,11 +16,11 @@ jobs:
     - name: 安装 CMake
       uses: lukka/get-cmake@latest
 
-    - name: 下载 TurboJPEG 依赖
+    - name: 下载 TurboJPEG 依赖（使用 GitHub release）
       shell: powershell
       run: |
-        # 下载 Windows 预编译库
-        Invoke-WebRequest -Uri "https://sourceforge.net/projects/libjpeg-turbo/files/3.0.3/libjpeg-turbo-3.0.3-vc64.zip/download" -OutFile "tj.zip"
+        # 使用 GitHub 官方 release 的直链
+        Invoke-WebRequest -Uri "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.3/libjpeg-turbo-3.0.3-vc64.zip" -OutFile "tj.zip"
         Expand-Archive -Path "tj.zip" -DestinationPath "tj_temp"
         # 将头文件和库文件移动到项目指定的 turbojpeg 文件夹
         Move-Item -Path "tj_temp\libjpeg-turbo-3.0.3-vc64\include" -Destination "turbojpeg"
