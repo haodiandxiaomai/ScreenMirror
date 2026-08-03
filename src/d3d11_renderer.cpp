@@ -183,7 +183,7 @@ bool D3D11Renderer::createWindow() {
     windowedRect_.right = 1100;
     windowedRect_.bottom = 700;
 
-    hwnd_ = CreateWindowEx(
+    hwnd_ = CreateWindowExW(   
         0,
         WindowClassName(),
         WindowTitleBase(),
@@ -212,11 +212,11 @@ bool D3D11Renderer::createDevice() {
 
     IDXGIDevice* dxgiDevice = nullptr;
     IDXGIAdapter* adapter = nullptr;
-    IDXGIFactory2* factory = nullptr;
+    IDXGIFactory4* factory = nullptr;  // 改为 IDXGIFactory4
 
     hr = device_->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgiDevice);
     if (SUCCEEDED(hr)) hr = dxgiDevice->GetAdapter(&adapter);
-    if (SUCCEEDED(hr)) hr = adapter->GetParent(__uuidof(IDXGIFactory2), (void**)&factory);
+    if (SUCCEEDED(hr)) hr = adapter->GetParent(__uuidof(IDXGIFactory4), (void**)&factory);  // 使用 IDXGIFactory4
 
     if (factory) {
         BOOL allowTearing = FALSE;
@@ -828,12 +828,12 @@ void D3D11Renderer::updateHudTextureIfNeeded(bool force) {
     // 统计信息
     wchar_t buf[256];
     if (cachedRecvFps_ > 0.0 || cachedDecodeFps_ > 0.0 || cachedDisplayFps_ > 0.0) {
-        swprintf(buf, 256, L"接收: %.1f fps  %.1f Mbps  解码: %.1f fps  显示: %.1f fps",
+        swprintf_s(buf, 256, L"接收: %.1f fps  %.1f Mbps  解码: %.1f fps  显示: %.1f fps",
                  cachedRecvFps_, cachedRecvMbps_, cachedDecodeFps_, cachedDisplayFps_);
         lines.push_back(buf);
     }
     if (cachedAvgJpegKb_ > 0.0) {
-        swprintf(buf, 256, L"平均 JPEG: %.1f KB  分块: %d  (0:%.1fKB 1:%.1fKB)",
+        swprintf_s(buf, 256, L"平均 JPEG: %.1f KB  分块: %d  (0:%.1fKB 1:%.1fKB)",
                  cachedAvgJpegKb_, cachedRecvParts_, cachedPart0Kb_, cachedPart1Kb_);
         lines.push_back(buf);
     }
@@ -842,31 +842,31 @@ void D3D11Renderer::updateHudTextureIfNeeded(bool force) {
 
     // 延迟数据
     if (lowerBoundMs_ > 0.0) {
-        swprintf(buf, 256, L"延迟下限: %.1f ms  (capture %.1f encode %.1f queue %.1f socket %.1f decode %.1f upload %.1f draw %.1f present %.1f)",
+        swprintf_s(buf, 256, L"延迟下限: %.1f ms  (capture %.1f encode %.1f queue %.1f socket %.1f decode %.1f upload %.1f draw %.1f present %.1f)",
                  lowerBoundMs_, cachedCaptureMs_, cachedEncodeMs_, cachedQueueMs_,
                  cachedSocketMs_, cachedDecodeWallMs_, lastUploadCpuMs_, lastDrawCpuMs_, lastPresentCpuMs_);
         lines.push_back(buf);
     }
     if (presentIntervalShownAvgMs_ > 0.0) {
-        swprintf(buf, 256, L"显示间隔: avg %.2f ms  max %.2f ms  p95 %.2f ms  p99 %.2f ms",
+        swprintf_s(buf, 256, L"显示间隔: avg %.2f ms  max %.2f ms  p95 %.2f ms  p99 %.2f ms",
                  presentIntervalShownAvgMs_, presentIntervalShownMaxMs_, presentIntervalP95Ms_, presentIntervalP99Ms_);
         lines.push_back(buf);
     }
     if (skippedFramesLast_ > 0) {
-        swprintf(buf, 256, L"跳帧: %d", skippedFramesLast_);
+        swprintf_s(buf, 256, L"跳帧: %d", skippedFramesLast_);
         lines.push_back(buf);
     }
     if (uploadMapCountShown_ > 0 || uploadFallbackCountShown_ > 0) {
-        swprintf(buf, 256, L"上传: Map %d  Fallback %d  Fail %d  mode %d  pitch %u",
+        swprintf_s(buf, 256, L"上传: Map %d  Fallback %d  Fail %d  mode %d  pitch %u",
                  uploadMapCountShown_, uploadFallbackCountShown_, uploadFailedCountShown_, lastUploadMode_, lastUploadRowPitch_);
         lines.push_back(buf);
     }
     if (cachedDisplayFps_ > 0.0) {
-        swprintf(buf, 256, L"等效 FPS (下限): %.1f", lowerBoundEqFps_);
+        swprintf_s(buf, 256, L"等效 FPS (下限): %.1f", lowerBoundEqFps_);
         lines.push_back(buf);
     }
     if (cachedDecodePartCount_ > 1) {
-        swprintf(buf, 256, L"解码分块: %d  墙钟 %.1fms  CPU %.1fms  最大块 %.1fms  尾部等待 %.1fms  重叠节省 %.1fms",
+        swprintf_s(buf, 256, L"解码分块: %d  墙钟 %.1fms  CPU %.1fms  最大块 %.1fms  尾部等待 %.1fms  重叠节省 %.1fms",
                  cachedDecodePartCount_, cachedDecodeWallMs_, cachedDecodeCpuSumMs_,
                  cachedDecodeMaxPartMs_, cachedDecodeTailWaitMs_, cachedDecodeOverlapSavedMs_);
         lines.push_back(buf);
@@ -901,7 +901,7 @@ void D3D11Renderer::appendPartStatsHudLines(std::vector<std::wstring>& lines) co
     if (cachedPartStatCount_ <= 0) return;
     wchar_t buf[512];
     for (int i = 0; i < cachedPartStatCount_ && i < MAX_RUNTIME_SPLIT_PARTS; ++i) {
-        swprintf(buf, 512, L"  Part %d: left=%d top=%d %dx%d  %.1fKB  cpu%d freq%d  enc%.1fms  share%d‰",
+        swprintf_s(buf, 512, L"  Part %d: left=%d top=%d %dx%d  %.1fKB  cpu%d freq%d  enc%.1fms  share%d‰",
                  i, cachedPartLeft_[i], cachedPartTop_[i], cachedPartWidth_[i], cachedPartHeight_[i],
                  cachedPartKb_[i], cachedPartCpu_[i], cachedPartCpuFreqKhz_[i],
                  cachedPartMs_[i], cachedPartSharePermille_[i]);
