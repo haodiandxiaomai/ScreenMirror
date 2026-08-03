@@ -4,7 +4,8 @@ project(ScreenMirror)
 set(CMAKE_CXX_STANDARD 17)
 
 set(TURBOJPEG_DIR "${CMAKE_SOURCE_DIR}/turbojpeg")
-include_directories(${TURBOJPEG_DIR})
+# 修正1：头文件目录指向 include 子文件夹
+include_directories(${TURBOJPEG_DIR}/include)
 
 set(SOURCES
     src/main.cpp
@@ -24,7 +25,8 @@ if(WIN32)
         dxgi
         d3dcompiler
         winmm
-        ${TURBOJPEG_DIR}/turbojpeg-static.lib
+        # 修正2：库文件指向 lib 子文件夹
+        ${TURBOJPEG_DIR}/lib/turbojpeg-static.lib
     )
 else()
     message(FATAL_ERROR "Only Windows is supported")
