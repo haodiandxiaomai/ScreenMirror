@@ -809,84 +809,25 @@ void D3D11Renderer::updateHudTextureIfNeeded(bool force) {
 
     const int width = hudTexWidth_;
     const int height = hudTexHeight_;
+    hudPixels_.assign(static_cast<size_t>(width) * height * 4, 0);
 
-    // 使用 hudPixels_ 作为中间缓冲区
-    const size_t pixelCount = static_cast<size_t>(width) * height;
-    hudPixels_.assign(pixelCount * 4, 0);
-
-    // 准备文字行（保留中文，但点阵字体只支持 ASCII，中文将显示为 '?'）
-    std::vector<std::wstring> lines;
-    lines.push_back(L"Status: " + currentStatus_);
-
-    wchar_t buf[256];
-    if (cachedRecvFps_ > 0.0 || cachedDecodeFps_ > 0.0 || cachedDisplayFps_ > 0.0) {
-        swprintf_s(buf, 256, L"Recv: %.1f fps  %.1f Mbps  Dec: %.1f fps  Disp: %.1f fps",
-                   cachedRecvFps_, cachedRecvMbps_, cachedDecodeFps_, cachedDisplayFps_);
-        lines.push_back(buf);
-    }
-    if (cachedAvgJpegKb_ > 0.0) {
-        swprintf_s(buf, 256, L"JPEG: %.1f KB  Parts: %d  (0:%.1fKB 1:%.1fKB)",
-                   cachedAvgJpegKb_, cachedRecvParts_, cachedPart0Kb_, cachedPart1Kb_);
-        lines.push_back(buf);
-    }
-    // 分块统计（保留英文部分，中文会变 '?'，但数据是数字，无妨）
-    appendPartStatsHudLines(lines);
-
-    if (lowerBoundMs_ > 0.0) {
-        swprintf_s(buf, 256, L"Latency: %.1f ms  (capture %.1f encode %.1f queue %.1f socket %.1f decode %.1f upload %.1f draw %.1f present %.1f)",
-                   lowerBoundMs_, cachedCaptureMs_, cachedEncodeMs_, cachedQueueMs_,
-                   cachedSocketMs_, cachedDecodeWallMs_, lastUploadCpuMs_, lastDrawCpuMs_, lastPresentCpuMs_);
-        lines.push_back(buf);
-    }
-    if (presentIntervalShownAvgMs_ > 0.0) {
-        swprintf_s(buf, 256, L"Interval: avg %.2f ms  max %.2f ms  p95 %.2f ms  p99 %.2f ms",
-                   presentIntervalShownAvgMs_, presentIntervalShownMaxMs_, presentIntervalP95Ms_, presentIntervalP99Ms_);
-        lines.push_back(buf);
-    }
-    if (skippedFramesLast_ > 0) {
-        swprintf_s(buf, 256, L"Skipped: %d", skippedFramesLast_);
-        lines.push_back(buf);
-    }
-    if (uploadMapCountShown_ > 0 || uploadFallbackCountShown_ > 0) {
-        swprintf_s(buf, 256, L"Upload: Map %d  Fallback %d  Fail %d  mode %d  pitch %u",
-                   uploadMapCountShown_, uploadFallbackCountShown_, uploadFailedCountShown_, lastUploadMode_, lastUploadRowPitch_);
-        lines.push_back(buf);
-    }
+    // ========== 只显示帧率 ==========
+    wchar_t fpsText[64];
     if (cachedDisplayFps_ > 0.0) {
-        swprintf_s(buf, 256, L"Equiv FPS: %.1f", lowerBoundEqFps_);
-        lines.push_back(buf);
-    }
-    if (cachedDecodePartCount_ > 1) {
-        swprintf_s(buf, 256, L"Decode parts: %d  wall %.1fms  CPU %.1fms  max %.1fms  tail %.1fms  saved %.1fms",
-                   cachedDecodePartCount_, cachedDecodeWallMs_, cachedDecodeCpuSumMs_,
-                   cachedDecodeMaxPartMs_, cachedDecodeTailWaitMs_, cachedDecodeOverlapSavedMs_);
-        lines.push_back(buf);
+        swprintf_s(fpsText, 64, L"FPS: %.1f", cachedDisplayFps_);
+    } else {
+        wcscpy_s(fpsText, 64, L"FPS: --");
     }
 
-    // 使用点阵字体绘制每一行
-    const int scale = 2;
-    int yPos = 10;
-    const uint8_t fgB = 255, fgG = 255, fgR = 255, fgA = 255; // 白色
+    // 转换为窄字符串（点阵字体只支持 ASCII）
+    char narrow[64];
+    size_t converted = 0;
+    wcstombs_s(&converted, narrow, 64, fpsText, _TRUNCATE);
 
-    for (const auto& wline : lines) {
-        // 将宽字符串转为窄字符串，点阵字体只支持 ASCII
-        std::string narrow;
-        for (wchar_t ch : wline) {
-            if (ch >= 32 && ch <= 126) {
-                narrow.push_back(static_cast<char>(ch));
-            } else {
-                // 非 ASCII 用 '?' 代替
-                narrow.push_back('?');
-            }
-        }
-        if (narrow.empty()) continue;
-        // 使用 HudDrawText 绘制到 hudPixels_
-        HudDrawText(hudPixels_, width, height, 10, yPos, narrow.c_str(), scale, fgB, fgG, fgR, fgA);
-        yPos += (7 + 1) * scale; // 每行高度
-        if (yPos >= height) break;
-    }
+    // 用点阵字体绘制，位置在左上角，放大 3 倍
+    HudDrawText(hudPixels_, width, height, 10, 10, narrow, 3, 255, 255, 255, 255);
 
-    // 将 hudPixels_ 复制到纹理
+    // 复制到纹理
     uint8_t* dst = static_cast<uint8_t*>(mapped.pData);
     std::memcpy(dst, hudPixels_.data(), hudPixels_.size());
 
