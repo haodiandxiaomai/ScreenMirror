@@ -3,8 +3,12 @@ project(ScreenMirror)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# 🔴 关键修复：强制使用 winsock2，禁止 winsock.h
+add_compile_definitions(WIN32_LEAN_AND_MEAN)
+add_compile_definitions(NOMINMAX)
+add_compile_definitions(_WINSOCKAPI_)
+
 set(TURBOJPEG_DIR "${CMAKE_SOURCE_DIR}/turbojpeg")
-# 修正1：头文件目录指向 include 子文件夹
 include_directories(${TURBOJPEG_DIR}/include)
 
 set(SOURCES
@@ -25,7 +29,6 @@ if(WIN32)
         dxgi
         d3dcompiler
         winmm
-        # 修正2：库文件指向 lib 子文件夹
         ${TURBOJPEG_DIR}/lib/turbojpeg-static.lib
     )
 else()
