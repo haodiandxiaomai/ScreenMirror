@@ -655,8 +655,8 @@ void D3D11Renderer::render(bool presentedNewFrame) {
     D3D11_VIEWPORT vp{};
     vp.TopLeftX = 0.0f;
     vp.TopLeftY = 0.0f;
-    vp.Width = static_cast<float>((std::max)(1L, clientW));
-    vp.Height = static_cast<float>((std::max)(1L, clientH));
+    vp.Width = static_cast<float>((std::max)(1, clientW));
+    vp.Height = static_cast<float>((std::max)(1, clientH));
     vp.MinDepth = 0.0f;
     vp.MaxDepth = 1.0f;
 
