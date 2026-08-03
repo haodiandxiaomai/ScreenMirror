@@ -16,19 +16,6 @@ jobs:
     - name: 安装 CMake
       uses: lukka/get-cmake@latest
 
-    - name: 下载并安装 TurboJPEG 3.0.2（静默安装）
-      shell: powershell
-      run: |
-        # 下载 3.0.2 的 exe 安装包（官方提供）
-        Invoke-WebRequest -Uri "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.2/libjpeg-turbo-3.0.2-vc64.exe" -OutFile "tj_install.exe"
-        # 静默安装到默认目录
-        Start-Process -Wait -FilePath ".\tj_install.exe" -ArgumentList "/SILENT"
-        # 从安装目录复制头文件和库到项目指定的 turbojpeg 文件夹
-        $tjDir = "C:\libjpeg-turbo64"
-        Copy-Item -Path "$tjDir\include\*" -Destination "turbojpeg\include\" -Recurse -Force
-        Copy-Item -Path "$tjDir\lib\*" -Destination "turbojpeg\lib\" -Recurse -Force
-        Remove-Item -Force "tj_install.exe"
-
     - name: 配置 CMake 项目
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
