@@ -635,20 +635,7 @@ void D3D11Renderer::render(bool presentedNewFrame) {
     int clientW = rc.right - rc.left;
     int clientH = rc.bottom - rc.top;
 
-    // ========== 调试日志（写入 %TEMP%\debug_log.txt） ==========
-    static int dbgCount = 0;
-    if (dbgCount++ % 30 == 0) {
-        wchar_t tempPath[MAX_PATH];
-        GetTempPathW(MAX_PATH, tempPath);
-        wcscat_s(tempPath, L"debug_log.txt");
-        FILE* fp = nullptr;
-        _wfopen_s(&fp, tempPath, L"a");
-        if (fp) {
-            fwprintf(fp, L"Client: %dx%d  Frame: %dx%d  Stretch: %d\n",
-                     clientW, clientH, currentFrame_.width, currentFrame_.height, stretch_ ? 1 : 0);
-            fclose(fp);
-        }
-    }
+
 
     // ========== 强制视口为整个客户区 ==========
     float clear[4] = { 0, 0, 0, 1 };
