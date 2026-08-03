@@ -628,56 +628,44 @@ void D3D11Renderer::updateVertices() {
 // ---------- 渲染 ----------
 void D3D11Renderer::render(bool presentedNewFrame) {
     if (!rtv_) return;
-    // 临时调试代码
-    RECT rcTest{};
-    GetClientRect(hwnd_, &rcTest);
-    static int dbgCount = 0;
-    if (dbgCount++ % 30 == 0) {
-        wchar_t dbgMsg[256];
-        swprintf_s(dbgMsg, 256, L"VP: %.0fx%.0f  ClientRect: %d,%d,%d,%d  Frame: %dx%d  Stretch: %d",
-                   vp.Width, vp.Height, rcTest.left, rcTest.top, rcTest.right, rcTest.bottom,
-                   currentFrame_.width, currentFrame_.height, stretch_ ? 1 : 0);
-        OutputDebugStringW(dbgMsg);  // 这个输出在 GitHub Actions 里看不到，但本地运行时可以用 DebugView 查看
-        // 改成写入文件，方便查看：
-        FILE* fp = nullptr;
-        _wfopen_s(&fp, L"C:\\debug_log.txt", L"a");
-        if (fp) {
-            fwprintf(fp, L"%s\n", dbgMsg);
-            fclose(fp);
-        }
-    }
     const int64_t renderBeginNs = NowNs();
 
     RECT rc{};
     GetClientRect(hwnd_, &rc);
+    int clientW = rc.right - rc.left;
+    int clientH = rc.bottom - rc.top;
+
+    // ========== 调试日志（写入 %TEMP%\debug_log.txt） ==========
+    static int dbgCount = 0;
+    if (dbgCount++ % 30 == 0) {
+        wchar_t tempPath[MAX_PATH];
+        GetTempPathW(MAX_PATH, tempPath);
+        wcscat_s(tempPath, L"debug_log.txt");
+        FILE* fp = nullptr;
+        _wfopen_s(&fp, tempPath, L"a");
+        if (fp) {
+            fwprintf(fp, L"Client: %dx%d  Frame: %dx%d  Stretch: %d\n",
+                     clientW, clientH, currentFrame_.width, currentFrame_.height, stretch_ ? 1 : 0);
+            fclose(fp);
+        }
+    }
+
+    // ========== 强制视口为整个客户区 ==========
     float clear[4] = { 0, 0, 0, 1 };
     D3D11_VIEWPORT vp{};
-    vp.TopLeftX = 0;
-    vp.TopLeftY = 0;
-    vp.Width = float((std::max)(1L, rc.right - rc.left));
-    vp.Height = float((std::max)(1L, rc.bottom - rc.top));
+    vp.TopLeftX = 0.0f;
+    vp.TopLeftY = 0.0f;
+    vp.Width = static_cast<float>((std::max)(1L, clientW));
+    vp.Height = static_cast<float>((std::max)(1L, clientH));
     vp.MinDepth = 0.0f;
     vp.MaxDepth = 1.0f;
 
-    // 计算视口布局 (简单拉伸或保持比例)
+    // frameVp 直接等于 vp，确保铺满窗口
     D3D11_VIEWPORT frameVp = vp;
-    int displayFrameW = currentFrame_.width;
-    int displayFrameH = currentFrame_.height;
-    if (displayFrameW > 0 && displayFrameH > 0) {
-        if (!stretch_) {
-            float frameAspect = float(displayFrameW) / float(displayFrameH);
-            float vpAspect = vp.Width / vp.Height;
-            if (frameAspect > vpAspect) {
-                float h = vp.Width / frameAspect;
-                frameVp.TopLeftY += (vp.Height - h) * 0.5f;
-                frameVp.Height = h;
-            } else {
-                float w = vp.Height * frameAspect;
-                frameVp.TopLeftX += (vp.Width - w) * 0.5f;
-                frameVp.Width = w;
-            }
-        }
-    }
+
+    // 即使 stretch_ 为 false，也强制全屏（覆盖原有比例计算）
+    // 如果想保留比例，可在此处添加 if (!stretch_) 判断，但暂时强制拉伸
+    frameVp = vp;
 
     updateVertices();
 
@@ -1011,7 +999,21 @@ LRESULT D3D11Renderer::handleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         break;
     case WM_SIZE:
         if (swapChain_ && wp != SIZE_MINIMIZED) {
-            recreateRTV();
+            // 释放旧的 RTV
+            if (rtv_) { rtv_->Release(); rtv_ = nullptr; }
+            // 获取新客户区大小
+            RECT rc;
+            GetClientRect(hwnd_, &rc);
+            int w = rc.right - rc.left;
+            int h = rc.bottom - rc.top;
+            if (w > 0 && h > 0) {
+                // 调整交换链缓冲大小，匹配窗口尺寸
+                HRESULT hr = swapChain_->ResizeBuffers(2, w, h, DXGI_FORMAT_R8G8B8A8_UNORM,
+                                                        allowTearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+                if (SUCCEEDED(hr)) {
+                    recreateRTV();
+                }
+            }
             dirtyWindow_ = true;
         }
         break;
