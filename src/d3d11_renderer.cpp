@@ -628,6 +628,24 @@ void D3D11Renderer::updateVertices() {
 // ---------- 渲染 ----------
 void D3D11Renderer::render(bool presentedNewFrame) {
     if (!rtv_) return;
+    // 临时调试代码
+    RECT rcTest{};
+    GetClientRect(hwnd_, &rcTest);
+    static int dbgCount = 0;
+    if (dbgCount++ % 30 == 0) {
+        wchar_t dbgMsg[256];
+        swprintf_s(dbgMsg, 256, L"VP: %.0fx%.0f  ClientRect: %d,%d,%d,%d  Frame: %dx%d  Stretch: %d",
+                   vp.Width, vp.Height, rcTest.left, rcTest.top, rcTest.right, rcTest.bottom,
+                   currentFrame_.width, currentFrame_.height, stretch_ ? 1 : 0);
+        OutputDebugStringW(dbgMsg);  // 这个输出在 GitHub Actions 里看不到，但本地运行时可以用 DebugView 查看
+        // 改成写入文件，方便查看：
+        FILE* fp = nullptr;
+        _wfopen_s(&fp, L"C:\\debug_log.txt", L"a");
+        if (fp) {
+            fwprintf(fp, L"%s\n", dbgMsg);
+            fclose(fp);
+        }
+    }
     const int64_t renderBeginNs = NowNs();
 
     RECT rc{};
