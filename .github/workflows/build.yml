@@ -1,0 +1,41 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: 拉取代码
+      uses: actions/checkout@v4
+
+    - name: 安装 CMake
+      uses: lukka/get-cmake@latest
+
+    - name: 下载 TurboJPEG 依赖
+      shell: powershell
+      run: |
+        # 下载 Windows 预编译库
+        Invoke-WebRequest -Uri "https://sourceforge.net/projects/libjpeg-turbo/files/3.0.3/libjpeg-turbo-3.0.3-vc64.zip/download" -OutFile "tj.zip"
+        Expand-Archive -Path "tj.zip" -DestinationPath "tj_temp"
+        # 将头文件和库文件移动到项目指定的 turbojpeg 文件夹
+        Move-Item -Path "tj_temp\libjpeg-turbo-3.0.3-vc64\include" -Destination "turbojpeg"
+        Move-Item -Path "tj_temp\libjpeg-turbo-3.0.3-vc64\lib" -Destination "turbojpeg"
+        # 清理临时文件
+        Remove-Item -Recurse -Force "tj_temp", "tj.zip"
+
+    - name: 配置 CMake 项目
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: 编译生成 EXE
+      run: cmake --build build --config Release
+
+    - name: 上传编译好的 EXE 文件
+      uses: actions/upload-artifact@v4
+      with:
+        name: ScreenMirror-Exe
+        path: build/Release/ScreenMirror.exe
