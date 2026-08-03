@@ -119,6 +119,16 @@ private:
     ID3D11VertexShader* vs_{};
     ID3D11PixelShader* ps_{};
     ID3D11BlendState* alphaBlend_{};
+    ID3D11PixelShader* psFsrEasu_{ nullptr };
+    ID3D11PixelShader* psFsrRcas_{ nullptr };
+    ID3D11InputLayout* inputLayout_{ nullptr };
+    ID3D11Buffer* vertexBuffer_{ nullptr };
+    ID3D11Buffer* hudVertexBuffer_{ nullptr };
+    ID3D11Buffer* fsrCb_{ nullptr };
+    ID3D11SamplerState* sampler_{ nullptr };
+    ID3D11Texture2D* fsrTex_{ nullptr };
+    ID3D11ShaderResourceView* fsrSrv_{ nullptr };
+    ID3D11RenderTargetView* fsrRtv_{ nullptr };
     ID3D11Texture2D* frameTex_{};
     ID3D11ShaderResourceView* frameSrv_{};
     ID3D11Texture2D* hudTex_{};
