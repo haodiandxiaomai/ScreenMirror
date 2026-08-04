@@ -1106,29 +1106,47 @@ void D3D11Renderer::writeFrameToSharedMemory(const DecodedFrame& frame) {
     if (!frame.pixelsBGRA || frame.pixelsBGRA->empty()) return;
     if (!shmPtr_ || !frameEvent_) return;
 
-    const int width = frame.width;
-    const int height = frame.height;
-    const int pitch = width * 4;          // 直接计算，因为pixelsBGRA是连续BGRA
-    const size_t dataSize = static_cast<size_t>(pitch) * height;
+    const int srcWidth = frame.width;
+    const int srcHeight = frame.height;
+    if (srcWidth <= 0 || srcHeight <= 0) return;
 
-    // 检查是否超出最大分辨率
-    if (width > SHARED_MEM_MAX_WIDTH || height > SHARED_MEM_MAX_HEIGHT) {
-        return;
-    }
+    // 目标裁剪尺寸（固定 320x320）
+    const int TARGET_SIZE = 320;
+    const int srcPitch = srcWidth * 4;
+    const int dstPitch = TARGET_SIZE * 4;
+    const size_t dstDataSize = static_cast<size_t>(dstPitch) * TARGET_SIZE;
+
+    // 检查是否超出共享内存容量
+    if (dstDataSize > SHARED_MEM_DATA_SIZE) return;
+
+    // 计算居中裁剪区域
+    int cropX = (srcWidth - TARGET_SIZE) / 2;
+    int cropY = (srcHeight - TARGET_SIZE) / 2;
+    if (cropX < 0) cropX = 0;
+    if (cropY < 0) cropY = 0;
+    int cropW = (cropX + TARGET_SIZE <= srcWidth) ? TARGET_SIZE : (srcWidth - cropX);
+    int cropH = (cropY + TARGET_SIZE <= srcHeight) ? TARGET_SIZE : (srcHeight - cropY);
+    if (cropW <= 0 || cropH <= 0) return;
 
     // 写入头部
     SharedFrameHeader* header = static_cast<SharedFrameHeader*>(shmPtr_);
-    header->width = width;
-    header->height = height;
-    header->pitch = pitch;
+    header->width = cropW;
+    header->height = cropH;
+    header->pitch = dstPitch;
     header->timestamp_ns = NowNs();
-    header->dataSize = static_cast<uint32_t>(dataSize);
+    header->dataSize = static_cast<uint32_t>(dstDataSize);
     header->sequence = ++shmSequence_;
 
-    // 拷贝像素数据（BGRA格式）直接整块拷贝
+    // 拷贝裁剪后的像素数据（BGRA格式）
     uint8_t* dst = static_cast<uint8_t*>(shmPtr_) + sizeof(SharedFrameHeader);
     const uint8_t* src = frame.pixelsBGRA->data();
-    memcpy(dst, src, dataSize);   // 整块拷贝，数据连续
+
+    // 逐行拷贝裁剪区域
+    for (int y = 0; y < cropH; ++y) {
+        const uint8_t* srcRow = src + static_cast<size_t>(cropY + y) * static_cast<size_t>(srcPitch) + static_cast<size_t>(cropX) * 4u;
+        uint8_t* dstRow = dst + static_cast<size_t>(y) * static_cast<size_t>(dstPitch);
+        memcpy(dstRow, srcRow, static_cast<size_t>(dstPitch));
+    }
 
     // 触发事件，通知Python进程
     SetEvent(frameEvent_);
