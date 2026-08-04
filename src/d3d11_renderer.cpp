@@ -1102,52 +1102,44 @@ void D3D11Renderer::releaseSharedMemory() {
 }
 
 void D3D11Renderer::writeFrameToSharedMemory(const DecodedFrame& frame) {
-    // 需要CPU内存数据
     if (!frame.pixelsBGRA || frame.pixelsBGRA->empty()) return;
     if (!shmPtr_ || !frameEvent_) return;
 
-    const int srcWidth = frame.width;
-    const int srcHeight = frame.height;
-    if (srcWidth <= 0 || srcHeight <= 0) return;
+    const int TARGET = 320;
+    const int srcW = frame.width;
+    const int srcH = frame.height;
+    if (srcW < TARGET || srcH < TARGET) {
+        // 如果源帧小于320，可以缩放或填充，但这里假设都大于320
+        return;
+    }
 
-    // 目标裁剪尺寸（固定 320x320）
-    const int TARGET_SIZE = 320;
-    const int srcPitch = srcWidth * 4;
-    const int dstPitch = TARGET_SIZE * 4;
-    const size_t dstDataSize = static_cast<size_t>(dstPitch) * TARGET_SIZE;
+    const int srcPitch = srcW * 4;
+    const int dstPitch = TARGET * 4;
+    const size_t dstSize = static_cast<size_t>(dstPitch) * TARGET;
+    if (dstSize > SHARED_MEM_DATA_SIZE) return;
 
-    // 检查是否超出共享内存容量
-    if (dstDataSize > SHARED_MEM_DATA_SIZE) return;
-
-    // 计算居中裁剪区域
-    int cropX = (srcWidth - TARGET_SIZE) / 2;
-    int cropY = (srcHeight - TARGET_SIZE) / 2;
-    if (cropX < 0) cropX = 0;
-    if (cropY < 0) cropY = 0;
-    int cropW = (cropX + TARGET_SIZE <= srcWidth) ? TARGET_SIZE : (srcWidth - cropX);
-    int cropH = (cropY + TARGET_SIZE <= srcHeight) ? TARGET_SIZE : (srcHeight - cropY);
-    if (cropW <= 0 || cropH <= 0) return;
+    // 计算裁剪起点（居中）
+    const int cropX = (srcW - TARGET) / 2;
+    const int cropY = (srcH - TARGET) / 2;
 
     // 写入头部
     SharedFrameHeader* header = static_cast<SharedFrameHeader*>(shmPtr_);
-    header->width = cropW;
-    header->height = cropH;
+    header->width = TARGET;
+    header->height = TARGET;
     header->pitch = dstPitch;
     header->timestamp_ns = NowNs();
-    header->dataSize = static_cast<uint32_t>(dstDataSize);
+    header->dataSize = static_cast<uint32_t>(dstSize);
     header->sequence = ++shmSequence_;
 
-    // 拷贝裁剪后的像素数据（BGRA格式）
     uint8_t* dst = static_cast<uint8_t*>(shmPtr_) + sizeof(SharedFrameHeader);
     const uint8_t* src = frame.pixelsBGRA->data();
 
-    // 逐行拷贝裁剪区域
-    for (int y = 0; y < cropH; ++y) {
-        const uint8_t* srcRow = src + static_cast<size_t>(cropY + y) * static_cast<size_t>(srcPitch) + static_cast<size_t>(cropX) * 4u;
-        uint8_t* dstRow = dst + static_cast<size_t>(y) * static_cast<size_t>(dstPitch);
-        memcpy(dstRow, srcRow, static_cast<size_t>(dstPitch));
+    // 逐行拷贝
+    for (int y = 0; y < TARGET; ++y) {
+        const uint8_t* srcRow = src + static_cast<size_t>(cropY + y) * srcPitch + static_cast<size_t>(cropX) * 4;
+        uint8_t* dstRow = dst + static_cast<size_t>(y) * dstPitch;
+        memcpy(dstRow, srcRow, dstPitch);
     }
 
-    // 触发事件，通知Python进程
     SetEvent(frameEvent_);
 }
