@@ -35,8 +35,8 @@ struct SharedFrameHeader {
 #pragma pack(pop)
 
 // 最大支持分辨率（可调，此处设为 1920x1080，若需要4K可改大）
-static constexpr int SHARED_MEM_MAX_WIDTH  = 1920;
-static constexpr int SHARED_MEM_MAX_HEIGHT = 1080;
+static constexpr int SHARED_MEM_MAX_WIDTH  = 320;
+static constexpr int SHARED_MEM_MAX_HEIGHT = 320;
 static constexpr size_t SHARED_MEM_DATA_SIZE = 
     static_cast<size_t>(SHARED_MEM_MAX_WIDTH) * SHARED_MEM_MAX_HEIGHT * 4;
 static constexpr size_t SHARED_MEM_TOTAL_SIZE = 
