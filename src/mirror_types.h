@@ -2,6 +2,26 @@
 
 #ifndef NOMINMAX
 #define NOMINMAX
+#endif
+
+#include <winsock2.h>
+#include <d3d11.h>
+
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+static constexpr int MAX_RUNTIME_SPLIT_PARTS = 24;
+
+static constexpr int PORT = 27183;
+static constexpr const char* SOCKET_NAME = "huilang_screen_mirror";
+static constexpr uint32_t FRAME_MAGIC = 0x484C4D32;
+static constexpr int64_t NS_PER_MS = 1000000LL;
+
+
 // ---------- 共享内存结构（供Python读取） ----------
 #pragma pack(push, 1)
 struct SharedFrameHeader {
@@ -21,24 +41,6 @@ static constexpr size_t SHARED_MEM_DATA_SIZE =
     static_cast<size_t>(SHARED_MEM_MAX_WIDTH) * SHARED_MEM_MAX_HEIGHT * 4;
 static constexpr size_t SHARED_MEM_TOTAL_SIZE = 
     sizeof(SharedFrameHeader) + SHARED_MEM_DATA_SIZE;
-#endif
-
-#include <winsock2.h>
-#include <d3d11.h>
-
-#include <atomic>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <vector>
-
-static constexpr int MAX_RUNTIME_SPLIT_PARTS = 24;
-
-static constexpr int PORT = 27183;
-static constexpr const char* SOCKET_NAME = "huilang_screen_mirror";
-static constexpr uint32_t FRAME_MAGIC = 0x484C4D32;
-static constexpr int64_t NS_PER_MS = 1000000LL;
 
 struct FrameHeader {
     int32_t magic;
