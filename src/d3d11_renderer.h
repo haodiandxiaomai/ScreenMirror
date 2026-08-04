@@ -78,6 +78,15 @@ private:
     bool windowSizedToFrame_{ false };
     bool allowTearing_{ false };
     ID3D11Device* device_{};
+    // 共享内存（供Python YOLO进程读取）
+    HANDLE shmHandle_ = nullptr;
+    void* shmPtr_ = nullptr;
+    HANDLE frameEvent_ = nullptr;
+    uint32_t shmSequence_ = 0;   // 本地序列号
+
+    bool initSharedMemory();
+    void releaseSharedMemory();
+    void writeFrameToSharedMemory(const DecodedFrame& frame);
     std::chrono::steady_clock::time_point lastHudUpdate_{ std::chrono::steady_clock::now() - std::chrono::seconds(2) };
     std::wstring currentStatus_ = L"等待连接...";
     double cachedRecvFps_ = 0.0;
