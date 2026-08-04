@@ -150,6 +150,10 @@ bool D3D11Renderer::init() {
     dirtyWindow_ = true;
     hudDirty_ = true;
     titleDirty_ = true;
+    if (!initSharedMemory()) {
+        // 失败不影响主功能，可继续运行
+        // 但可以输出日志（可选）
+    }
     return true;
 }
 
@@ -586,6 +590,7 @@ bool D3D11Renderer::consumeLatestFrame() {
     currentGpuFrame_ = currentFrame_.gpuFrame;
     uploadedGeneration_ = currentFrame_.generation;
     fitWindowToFrameIfNeeded();
+    writeFrameToSharedMemory(currentFrame_);
     if (currentGpuFrame_ && currentGpuFrame_->srv) {
         lastUploadMode_ = 4;
         lastUploadRowPitch_ = 0;
@@ -597,6 +602,7 @@ bool D3D11Renderer::consumeLatestFrame() {
         lastUploadCpuMs_ = (std::max)(0.0, double(uploadDoneNs - uploadBeginNs) / 1000000.0);
         if (!uploadOk) return false;
     }
+
     dirtyWindow_ = true;
     titleDirty_ = true;
     hudDirty_ = true;
@@ -1034,4 +1040,106 @@ void D3D11Renderer::cleanup() {
     if (hudSrv_) { hudSrv_->Release(); hudSrv_ = nullptr; }
     if (ctx_) { ctx_->Release(); ctx_ = nullptr; }
     if (device_) { device_->Release(); device_ = nullptr; }
+    releaseSharedMemory();
+}
+// ---------- 共享内存（Python YOLO 集成） ----------
+bool D3D11Renderer::initSharedMemory() {
+    // 创建共享内存
+    shmHandle_ = CreateFileMappingW(
+        INVALID_HANDLE_VALUE,
+        nullptr,
+        PAGE_READWRITE,
+        0,
+        static_cast<DWORD>(SHARED_MEM_TOTAL_SIZE),
+        L"Local\\ScreenMirrorFrame"
+    );
+    if (!shmHandle_) {
+        // 如果已存在，尝试打开
+        shmHandle_ = OpenFileMappingW(FILE_MAP_ALL_ACCESS, FALSE, L"Local\\ScreenMirrorFrame");
+        if (!shmHandle_) return false;
+    }
+
+    shmPtr_ = MapViewOfFile(shmHandle_, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+    if (!shmPtr_) {
+        CloseHandle(shmHandle_);
+        shmHandle_ = nullptr;
+        return false;
+    }
+
+    // 创建事件
+    frameEvent_ = CreateEventW(nullptr, FALSE, FALSE, L"Local\\FrameReadyEvent");
+    if (!frameEvent_) {
+        // 尝试打开已有事件
+        frameEvent_ = OpenEventW(EVENT_ALL_ACCESS, FALSE, L"Local\\FrameReadyEvent");
+        if (!frameEvent_) {
+            // 若失败，继续（不阻塞主功能）
+        }
+    }
+
+    // 初始化头部
+    SharedFrameHeader* header = static_cast<SharedFrameHeader*>(shmPtr_);
+    header->sequence = 0;
+    header->width = 0;
+    header->height = 0;
+    header->dataSize = 0;
+
+    return true;
+}
+
+void D3D11Renderer::releaseSharedMemory() {
+    if (shmPtr_) {
+        UnmapViewOfFile(shmPtr_);
+        shmPtr_ = nullptr;
+    }
+    if (shmHandle_) {
+        CloseHandle(shmHandle_);
+        shmHandle_ = nullptr;
+    }
+    if (frameEvent_) {
+        CloseHandle(frameEvent_);
+        frameEvent_ = nullptr;
+    }
+}
+
+void D3D11Renderer::writeFrameToSharedMemory(const DecodedFrame& frame) {
+    // 需要CPU内存数据
+    if (!frame.pixelsBGRA || frame.pixelsBGRA->empty()) return;
+    if (!shmPtr_ || !frameEvent_) return;
+
+    const int width = frame.width;
+    const int height = frame.height;
+    const int pitch = width * 4;
+    const size_t dataSize = static_cast<size_t>(pitch) * height;
+
+    // 检查是否超出最大分辨率
+    if (width > SHARED_MEM_MAX_WIDTH || height > SHARED_MEM_MAX_HEIGHT) {
+        // 超出限制，不写入（可打印日志）
+        return;
+    }
+
+    // 写入头部
+    SharedFrameHeader* header = static_cast<SharedFrameHeader*>(shmPtr_);
+    header->width = width;
+    header->height = height;
+    header->pitch = pitch;
+    header->timestamp_ns = NowNs();  // 使用已有的高精度时间
+    header->dataSize = static_cast<uint32_t>(dataSize);
+    header->sequence = ++shmSequence_;
+
+    // 拷贝像素数据（BGRA格式）
+    uint8_t* dst = static_cast<uint8_t*>(shmPtr_) + sizeof(SharedFrameHeader);
+    const uint8_t* src = frame.pixelsBGRA->data();
+    // 如果pitch与每行宽度一致，可整块拷贝，否则逐行
+    if (static_cast<size_t>(pitch) == static_cast<size_t>(width * 4)) {
+        memcpy(dst, src, dataSize);
+    } else {
+        for (int y = 0; y < height; ++y) {
+            memcpy(dst + static_cast<size_t>(y) * pitch,
+                   src + static_cast<size_t>(y) * static_cast<size_t>(frame.pitch ? frame.pitch : pitch),
+                   static_cast<size_t>(pitch));
+        }
+    }
+
+    // 触发事件，通知Python进程
+    SetEvent(frameEvent_);
 }
