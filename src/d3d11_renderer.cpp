@@ -1108,12 +1108,11 @@ void D3D11Renderer::writeFrameToSharedMemory(const DecodedFrame& frame) {
 
     const int width = frame.width;
     const int height = frame.height;
-    const int pitch = width * 4;
+    const int pitch = width * 4;          // 直接计算，因为pixelsBGRA是连续BGRA
     const size_t dataSize = static_cast<size_t>(pitch) * height;
 
     // 检查是否超出最大分辨率
     if (width > SHARED_MEM_MAX_WIDTH || height > SHARED_MEM_MAX_HEIGHT) {
-        // 超出限制，不写入（可打印日志）
         return;
     }
 
@@ -1122,23 +1121,14 @@ void D3D11Renderer::writeFrameToSharedMemory(const DecodedFrame& frame) {
     header->width = width;
     header->height = height;
     header->pitch = pitch;
-    header->timestamp_ns = NowNs();  // 使用已有的高精度时间
+    header->timestamp_ns = NowNs();
     header->dataSize = static_cast<uint32_t>(dataSize);
     header->sequence = ++shmSequence_;
 
-    // 拷贝像素数据（BGRA格式）
+    // 拷贝像素数据（BGRA格式）直接整块拷贝
     uint8_t* dst = static_cast<uint8_t*>(shmPtr_) + sizeof(SharedFrameHeader);
     const uint8_t* src = frame.pixelsBGRA->data();
-    // 如果pitch与每行宽度一致，可整块拷贝，否则逐行
-    if (static_cast<size_t>(pitch) == static_cast<size_t>(width * 4)) {
-        memcpy(dst, src, dataSize);
-    } else {
-        for (int y = 0; y < height; ++y) {
-            memcpy(dst + static_cast<size_t>(y) * pitch,
-                   src + static_cast<size_t>(y) * static_cast<size_t>(frame.pitch ? frame.pitch : pitch),
-                   static_cast<size_t>(pitch));
-        }
-    }
+    memcpy(dst, src, dataSize);   // 整块拷贝，数据连续
 
     // 触发事件，通知Python进程
     SetEvent(frameEvent_);
