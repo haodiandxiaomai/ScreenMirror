@@ -2,6 +2,25 @@
 
 #ifndef NOMINMAX
 #define NOMINMAX
+// ---------- 共享内存结构（供Python读取） ----------
+#pragma pack(push, 1)
+struct SharedFrameHeader {
+    int32_t width;
+    int32_t height;
+    int32_t pitch;          // 每行字节数（一般为 width * 4）
+    int64_t timestamp_ns;   // 帧产生时间（可选）
+    uint32_t sequence;      // 帧序列号，递增
+    uint32_t dataSize;      // 实际数据大小（width * height * 4）
+};
+#pragma pack(pop)
+
+// 最大支持分辨率（可调，此处设为 1920x1080，若需要4K可改大）
+static constexpr int SHARED_MEM_MAX_WIDTH  = 1920;
+static constexpr int SHARED_MEM_MAX_HEIGHT = 1080;
+static constexpr size_t SHARED_MEM_DATA_SIZE = 
+    static_cast<size_t>(SHARED_MEM_MAX_WIDTH) * SHARED_MEM_MAX_HEIGHT * 4;
+static constexpr size_t SHARED_MEM_TOTAL_SIZE = 
+    sizeof(SharedFrameHeader) + SHARED_MEM_DATA_SIZE;
 #endif
 
 #include <winsock2.h>
